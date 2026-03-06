@@ -50,8 +50,7 @@ x-airflow-common: &airflow-common
   # and uncomment the "build" line below, Then run `docker-compose build` to build the images.
   # image: ${AIRFLOW_IMAGE_NAME:-apache/airflow:3.1.7}
   build: ./airflow
-  env_file:
-    - ${ENV_FILE_PATH:-.env}
+  env_file: ".env.airflow"
   environment: &airflow-common-env
     AIRFLOW__CORE__EXECUTOR: CeleryExecutor
     AIRFLOW__CORE__AUTH_MANAGER: airflow.providers.fab.auth_manager.fab_auth_manager.FabAuthManager
@@ -99,7 +98,7 @@ x-airflow-common: &airflow-common
     - ${AIRFLOW_PROJ_DIR:-.}/logs:/opt/airflow/logs
     - ${AIRFLOW_PROJ_DIR:-.}/config:/opt/airflow/config
     - ${AIRFLOW_PROJ_DIR:-.}/plugins:/opt/airflow/plugins
-  user: "${AIRFLOW_UID:-50000}:0"
+  user: "${AIRFLOW_UID:-1000}:0"
   depends_on: &airflow-common-depends-on
     redis:
       condition: service_healthy
@@ -121,6 +120,8 @@ services:
       retries: 5
       start_period: 5s
     restart: always
+    networks:
+      - bionicpro-net
 
   redis:
     # Redis is limited to 7.2-bookworm due to licencing change
@@ -135,6 +136,8 @@ services:
       retries: 50
       start_period: 30s
     restart: always
+    networks:
+      - bionicpro-net
 
   airflow-apiserver:
     <<: *airflow-common
@@ -152,6 +155,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
   airflow-scheduler:
     <<: *airflow-common
@@ -167,6 +172,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
   airflow-dag-processor:
     <<: *airflow-common
@@ -186,6 +193,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
   airflow-worker:
     <<: *airflow-common
@@ -211,6 +220,8 @@ services:
         condition: service_healthy
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
   airflow-triggerer:
     <<: *airflow-common
@@ -230,6 +241,8 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
   airflow-init:
     <<: *airflow-common
@@ -322,6 +335,8 @@ services:
       _AIRFLOW_WWW_USER_PASSWORD: ${_AIRFLOW_WWW_USER_PASSWORD:-airflow}
       _PIP_ADDITIONAL_REQUIREMENTS: ""
     user: "0:0"
+    networks:
+      - bionicpro-net
 
   airflow-cli:
     <<: *airflow-common
@@ -337,6 +352,8 @@ services:
       - airflow
     depends_on:
       <<: *airflow-common-depends-on
+    networks:
+      - bionicpro-net
 
   # You can enable flower by adding "--profile flower" option e.g. docker-compose --profile flower up
   # or by explicitly targeted on the command line e.g. docker-compose up flower.
@@ -359,6 +376,13 @@ services:
       <<: *airflow-common-depends-on
       airflow-init:
         condition: service_completed_successfully
+    networks:
+      - bionicpro-net
 
 volumes:
   postgres-db-volume:
+
+networks:
+  bionicpro-net:
+    external: true
+    name: bionicpro-shared-network

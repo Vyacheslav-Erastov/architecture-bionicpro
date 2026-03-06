@@ -14,9 +14,9 @@ class KeycloakClient:
         self.userinfo_url = f"{settings.keycloak_url}/realms/{settings.keycloak_realm}/protocol/openid-connect/userinfo"
         self.client_id = settings.client_id
         self.client_secret = settings.client_secret
-        self.redirect_uri = f"{settings.self_url}/{settings.redirect_path}"
+        self.redirect_uri = f"{settings.auth_url}/{settings.redirect_path}"
         self.logout_redirect_uri = (
-            f"{settings.self_url}/{settings.logout_redirect_path}"
+            f"{settings.auth_url}/{settings.logout_redirect_path}"
         )
 
     def generate_pkce_pair(self) -> tuple[str, str]:
@@ -75,9 +75,8 @@ class KeycloakClient:
 
     async def get_userinfo(self, access_token: str) -> dict:
         async with httpx.AsyncClient() as client:
-            resp = await client.get(
-                self.userinfo_url, headers={"Authorization": f"Bearer {access_token}"}
-            )
+            headers = {"Authorization": f"Bearer {access_token}"}
+            resp = await client.get(self.userinfo_url, headers=headers)
             resp.raise_for_status()
             return resp.json()
 

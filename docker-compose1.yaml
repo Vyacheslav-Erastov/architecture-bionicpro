@@ -38,11 +38,6 @@ services:
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      REACT_APP_API_URL: http://192.168.0.208:8000
-      REACT_APP_KEYCLOAK_URL: http://192.168.0.208:8080
-      REACT_APP_KEYCLOAK_REALM: reports-realm
-      REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
 
   bionicpro-auth:
     build:
@@ -50,9 +45,19 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8000:8000"
-    env_file: "./bionicpro-auth/.env"
+    command: ["python3", "main.py"]
+    volumes:
+      - ./bionicpro-auth/main.py:/app/main.py
+      - ./bionicpro-auth/app:/app/app
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-reports-realm}
+      CLIENT_ID: ${CLIENT_ID:-reports-frontend}
+      AUTH_URL: ${AUTH_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://session_db:6379}
 
-  redis:
+  session_db:
     image: redis:6.2
     restart: always
     ports:

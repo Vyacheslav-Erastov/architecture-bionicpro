@@ -35,13 +35,13 @@ class ReportResponse(BaseModel):
 
 app = FastAPI(title="ReportsAPI Service")
 
-AUTH_SERVICE_URL = os.getenv("AUTH_SERVICE_URL", "http://localhost:8000")
+AUTH_URL = os.getenv("AUTH_URL", "http://localhost:8000")
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 CLICKHOUSE_URL = os.getenv(
     "CLICKHOUSE_URL", "clickhouse://admin:admin@localhost:9431/default"
 )
 
-S3_ENDPOINT = os.getenv("S3_ENDPOINT", "localhost:9000")
+S3_ENDPOINT = os.getenv("S3_ENDPOINT", "localhost:9003")
 S3_ACCESS_KEY = os.getenv("S3_ACCESS_KEY", "minio_user")
 S3_SECRET_KEY = os.getenv("S3_SECRET_KEY", "minio_password")
 S3_BUCKET = os.getenv("S3_BUCKET", "reports")
@@ -108,7 +108,7 @@ async def get_report(request: Request, response: Response):
 
     session_id = request.cookies.get("session_id")
     user_response = requests.get(
-        f"{AUTH_SERVICE_URL}/auth/userinfo",
+        f"{AUTH_URL}/auth/userinfo",
         cookies={"session_id": session_id},
         timeout=5,
     )
@@ -145,6 +145,7 @@ async def get_report(request: Request, response: Response):
         s3_client.stat_object(S3_BUCKET, object_key)
         path = f"/reports/{email}/{latest_date}.json"
         cdn_url = generate_signed_url(path)
+        print("CDN_URL", cdn_url)
         return {"report_url": cdn_url}
     except S3Error:
         pass
@@ -211,7 +212,7 @@ async def get_report_v2(request: Request, response: Response):
 
     session_id = request.cookies.get("session_id")
     user_response = requests.get(
-        f"{AUTH_SERVICE_URL}/auth/userinfo",
+        f"{AUTH_URL}/auth/userinfo",
         cookies={"session_id": session_id},
         timeout=5,
     )

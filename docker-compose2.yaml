@@ -11,6 +11,8 @@ services:
       - ./postgres-keycloak-data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
+    networks:
+      - bionicpro-net
   keycloak:
     image: quay.io/keycloak/keycloak:21.1
     env_file: ./keycloak/.env
@@ -32,18 +34,16 @@ services:
       - "8080:8080"
     depends_on:
       - keycloak_db
+    networks:
+      - bionicpro-net
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
       - "3000:3000"
-    environment:
-      REACT_APP_API_URL: "${API_URL:-http://localhost:8001}"
-      REACT_APP_AUTH_URL: "${AUTH_URL:-http://localhost:8000}"
-      REACT_APP_KEYCLOAK_URL: "${KEYCLOAK_URL:-http://localhost:8080}"
-      REACT_APP_KEYCLOAK_REALM: reports-realm
-      REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
+    networks:
+      - bionicpro-net
 
   bionicpro-auth:
     build:
@@ -55,13 +55,23 @@ services:
       - ./bionicpro-auth/app:/app/app
     ports:
       - "8000:8000"
-    env_file: "./bionicpro-auth/.env"
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-reports-realm}
+      CLIENT_ID: ${CLIENT_ID:-reports-frontend}
+      AUTH_URL: ${AUTH_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://session_db:6379}
+    networks:
+      - bionicpro-net
 
-  redis:
+  session_db:
     image: redis:6.2
     restart: always
     ports:
       - "6379:6379"
+    networks:
+      - bionicpro-net
 
   openldap:
     image: osixia/openldap:1.5.0
@@ -76,6 +86,8 @@ services:
     ports:
       - "389:389"
       - "636:636"
+    networks:
+      - bionicpro-net
 
   crm_db:
     image: postgres:14
@@ -88,6 +100,8 @@ services:
       - ./postgres-crm-data:/var/lib/postgresql/data
     ports:
       - "5444:5432"
+    networks:
+      - bionicpro-net
 
   telemetry_db:
     image: postgres:14
@@ -100,6 +114,8 @@ services:
       - ./postgres-telemetry-data:/var/lib/postgresql/data
     ports:
       - "5445:5432"
+    networks:
+      - bionicpro-net
 
   olap_db:
     image: clickhouse/clickhouse-server:latest
@@ -116,6 +132,8 @@ services:
       interval: 1s
       timeout: 3s
       retries: 30
+    networks:
+      - bionicpro-net
 
   reports-api:
     build:
@@ -126,4 +144,14 @@ services:
       - ./reports-api/main.py:/app/main.py
     ports:
       - "8001:8001"
-    env_file: "./reports-api/.env"
+    environment:
+      AUTH_URL: ${AUTH_URL:-http://bionicpro-auth:8000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-clickhouse://admin:admin@olap_db:9000/default}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    networks:
+      - bionicpro-net
+
+networks:
+  bionicpro-net:
+    driver: bridge
+    name: bionicpro-shared-network
