@@ -1,0 +1,157 @@
+version: "3.8"
+
+services:
+  keycloak_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: keycloak_db
+      POSTGRES_USER: keycloak_user
+      POSTGRES_PASSWORD: keycloak_password
+    volumes:
+      - ./postgres-keycloak-data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"
+    networks:
+      - bionicpro-net
+  keycloak:
+    image: quay.io/keycloak/keycloak:21.1
+    env_file: ./keycloak/.env
+    environment:
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_DB: postgres
+      KC_DB_URL: jdbc:postgresql://keycloak_db:5432/keycloak_db
+      KC_DB_USERNAME: keycloak_user
+      KC_DB_PASSWORD: keycloak_password
+    command:
+      - start-dev
+      - --import-realm
+    volumes:
+      - ./keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json
+      - ./keycloak/providers:/opt/keycloak/providers
+      - ./keycloak/themes:/opt/keycloak/themes
+    ports:
+      - "8080:8080"
+    depends_on:
+      - keycloak_db
+    networks:
+      - bionicpro-net
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    networks:
+      - bionicpro-net
+
+  bionicpro-auth:
+    build:
+      context: ./bionicpro-auth
+      dockerfile: Dockerfile
+    command: ["python3", "main.py"]
+    volumes:
+      - ./bionicpro-auth/main.py:/app/main.py
+      - ./bionicpro-auth/app:/app/app
+    ports:
+      - "8000:8000"
+    environment:
+      KEYCLOAK_URL: ${KEYCLOAK_URL}
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM:-reports-realm}
+      CLIENT_ID: ${CLIENT_ID:-reports-frontend}
+      AUTH_URL: ${AUTH_URL:-http://localhost:8000}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+      REDIS_URL: ${REDIS_URL:-redis://session_db:6379}
+    networks:
+      - bionicpro-net
+
+  session_db:
+    image: redis:6.2
+    restart: always
+    ports:
+      - "6379:6379"
+    networks:
+      - bionicpro-net
+
+  openldap:
+    image: osixia/openldap:1.5.0
+    container_name: openldap
+    command: --copy-service
+    volumes:
+      - ./ldap/config.ldif:/container/service/slapd/assets/config/bootstrap/ldif/50-bootstrap.ldif
+    environment:
+      - LDAP_ORGANISATION=example-com
+      - LDAP_DOMAIN=example.com
+      - LDAP_ADMIN_PASSWORD=admin
+    ports:
+      - "389:389"
+      - "636:636"
+    networks:
+      - bionicpro-net
+
+  crm_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: crm_db
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    volumes:
+      - ./crm-db:/docker-entrypoint-initdb.d
+      - ./postgres-crm-data:/var/lib/postgresql/data
+    ports:
+      - "5444:5432"
+    networks:
+      - bionicpro-net
+
+  telemetry_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: telemetry_db
+      POSTGRES_USER: telemetry_user
+      POSTGRES_PASSWORD: telemetry_password
+    volumes:
+      - ./telemetry-db:/docker-entrypoint-initdb.d
+      - ./postgres-telemetry-data:/var/lib/postgresql/data
+    ports:
+      - "5445:5432"
+    networks:
+      - bionicpro-net
+
+  olap_db:
+    image: clickhouse/clickhouse-server:latest
+    ports:
+      - "8123:8123"
+      - "9431:9000"
+    volumes:
+      - ./clickhouse-data:/var/lib/clickhouse
+      - ./olap-db:/docker-entrypoint-initdb.d
+      - ./olap-db:/var/lib/clickhouse/user_files
+      - ./olap-db/users.xml:/etc/clickhouse-server/users.d/users.xml
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1'"]
+      interval: 1s
+      timeout: 3s
+      retries: 30
+    networks:
+      - bionicpro-net
+
+  reports-api:
+    build:
+      context: ./reports-api
+      dockerfile: Dockerfile
+    command: ["python3", "main.py"]
+    volumes:
+      - ./reports-api/main.py:/app/main.py
+    ports:
+      - "8001:8001"
+    environment:
+      AUTH_URL: ${AUTH_URL:-http://bionicpro-auth:8000}
+      CLICKHOUSE_URL: ${CLICKHOUSE_URL:-clickhouse://admin:admin@olap_db:9000/default}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:3000}
+    networks:
+      - bionicpro-net
+
+networks:
+  bionicpro-net:
+    driver: bridge
+    name: bionicpro-shared-network
